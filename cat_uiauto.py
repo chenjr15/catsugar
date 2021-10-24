@@ -1,10 +1,16 @@
 
-from catcat import back, visit_back, pos, wait_time, click
-import os
 import xml.etree.ElementTree as ET
 from time import sleep
-from point import Point
+from dataclasses import dataclass
+
 import logging
+try:
+    from common import *
+    from point import Point
+except ImportError:
+    from .common import *
+    from .point import Point
+
 logger = logging.getLogger("Main")
 
 
@@ -35,7 +41,7 @@ class MyNode:
     def tap(self):
 
         logger.info(f"taping:{self.center}")
-        click(self.center.x, self.center.y)
+        adbtap(self.center.x, self.center.y)
 
     def __str__(self) -> str:
         return f'<{self.type}:{self.text} {self.desc} {self.center}>'
@@ -46,36 +52,86 @@ class MyNode:
 
 stop = False
 cnt = 20
-while not stop and cnt > 0:
-    tree = ET.parse("./window_dump.xml")
-    dom = tree.getroot()
-    homepage_entry = dom.find(".//*[@content-desc='双11超级喵糖']")
-    if homepage_entry:
-        homepage_entry = MyNode(homepage_entry)
-        homepage_entry.tap()
-        print(homepage_entry)
-    earn_btn = dom.find(".//*[@text='赚糖领红包']")
-    if earn_btn is not None:
-        earn_btn = MyNode(earn_btn)
-        earn_btn.tap()
-        print(earn_btn)
-    go_nav_btn = dom.find(".//*[@text='去浏览']/..")
-    if go_nav_btn is not None:
-        go_nav_btn = MyNode(go_nav_btn)
+@dataclass
+class Keywords:
+    homepage = '双11超级喵糖'
+    opentask_btn = '赚糖领红包'
+    nav = '去浏览'
 
+
+keyword_config = Keywords()
+
+
+class Executor:
+    def __init__(self, xml_filename="./window_dump.xml") -> None:
+        self.xml_filename = xml_filename
+        self.tree: ET.ElementTree = None
+        self.root: ET.Element = None
+        self.stop = False
+        self.handlers: list['Handler'] = []
+
+    def add_handler(self, handler: 'Handler'):
+        self.handlers.append(handler)
+
+    def handle_once(self):
+        dump_window(pull=self.xml_filename)
+        self.tree = ET.parse(self.xml_filename)
+        self.root = self.tree.getroot()
+        for handler in self.handlers:
+            elem = self.root.find(handler.xpath)
+            print("finding:", handler.xpath, elem)
+
+            if elem is None:
+                continue
+            stophere = handler.handle(MyNode(elem), self)
+            wait_time(handler.post_delay)
+            if stophere:
+                break
+
+
+class Handler:
+    def __init__(self, xpath, post_delay=5) -> None:
+        self.xpath = xpath
+        self.post_delay = post_delay
+
+    def handle(self, node: MyNode, executor: Executor):
+        node.tap()
+        print(node)
+        return True
+
+
+class DoVisitHandler(Handler):
+    def handle(go_nav_btn: MyNode, executor: Executor):
         prompt_line = go_nav_btn.children()[2].text
-
         print(go_nav_btn, prompt_line)
         _, nums = prompt_line.split('(')
         nums = nums[:-1]
         a, b = nums.split('/')
         print("progress", int(a)/int(b))
-        if a == b:
-            print("stop!")
-            stop = True
-            continue
-        cnt -= 1
         go_nav_btn.tap()
         wait_time(30, 20)
         back()
         wait_time(10)
+        return True
+
+
+def execute():
+
+    executor = Executor()
+    executor.add_handler(
+        Handler(f".//*[@content-desc='{keyword_config.homepage}']"))
+    executor.add_handler(
+        Handler(f".//*[@text='{keyword_config.opentask_btn}']"))
+    executor.add_handler(
+        DoVisitHandler(f".//*[@text='{keyword_config.nav}']/.."))
+
+    while not stop and cnt > 0:
+        executor.handle_once()
+
+
+if __name__ == '__main__':
+    current = current_activity()
+    if current != TAOBAO_ACTIVITY:
+        start_activity(TAOBAO_ACTIVITY)
+        wait_time(20)
+    execute()
