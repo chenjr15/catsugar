@@ -1,9 +1,10 @@
 
 import logging
-from typing import Union
+from typing import Tuple, Union
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from time import sleep
+from subprocess import CalledProcessError
 
 try:
     from common import Activity, Device, chose_device, list_devices, wait_time
@@ -83,7 +84,8 @@ class Keywords:
     homepage = '双11超级喵糖'
     opentask_btn = '赚糖领红包'
     nav = '去浏览'
-    task_done = ['任务已完成', '喵糖已发放', '任务已完成喵糖已发放', '喵糖已发放明天再来吧']
+    task_done = ['任务已完成', '喵糖已发放', '任务已完成喵糖已发放',
+                 '喵糖已发放明天再来吧', '喵糖已发放\n明天再来吧']
     task_inprogress = "浏览得奖励"
 
 
@@ -103,16 +105,51 @@ class Executor:
 
     def handle_once(self):
         global device
-        device.dump_window(host_path=self.xml_filename)
+        print("dumping...")
+        try:
+            device.dump_window(host_path=self.xml_filename)
+        except CalledProcessError:
+            print("dump 失败，跳过")
+            return
         self.tree = ET.parse(self.xml_filename)
         for handler in self.handlers:
             node = handler.match(self.tree)
             if node is None:
                 continue
+            print("exec:", handler)
             stophere = handler.handle(node, self)
-            wait_time(handler.post_delay)
             if stophere:
                 break
+            wait_time(handler.post_delay)
+
+    def loop(self, limit=-1, interval=30):
+        """自动循环
+
+        Args:
+            limit (int, optional): 最多运行次数，负数为不限制. Defaults to -1.
+            interval (int, optional): 休息次数. Defaults to 30.
+
+        Returns:
+            None
+        """
+        cnt = 0
+        while not self.stop:
+            cnt += 1
+            if limit > -1 and cnt > limit:
+                print("reach limit")
+                break
+            if cnt % 30 == 0:
+                print("休息时间")
+                wait_time(20)
+            print(device, cnt)
+            self.handle_once()
+
+        device.back()
+        wait_time(1)
+        device.back()
+        device.back()
+        print("Bye!")
+        return cnt
 
 
 class Handler:
@@ -170,12 +207,18 @@ class PrefixMatch(Handler):
                 continue
             if child.get('text').startswith('浏览15'):
                 node = MyNode(elem)
-
+            # 已完成就不要再继续了
+            done = elem.find(".//node[@text='已完成']")
+            if done is None:
+                node = "STOP"
         return node
 
     def handle(self, node: MyNode, executor: Executor) -> bool:
-        node.tap()
-        print(node)
+        if node == "STOP":
+            executor.stop = True
+        else:
+            node.tap()
+            print(node)
         return True
 
 
@@ -187,6 +230,7 @@ class InStore(Handler):
     def match(self, tree: ET.ElementTree) -> MyNode:
         cur = device.current_activity()
         elem = None
+        # 检测任务是否完成
         for word in keyword_config.task_done:
 
             elem = tree.find(f".//node[@text='{word}']")
@@ -195,6 +239,7 @@ class InStore(Handler):
         if elem is not None:
             return MyNode(elem)
         in_store = False
+        # 如果在这些activity中说明在执行任务
         for act in (Activity.TB_EXBROWSER, Activity.TB_LIVE, Activity.TB_STORE):
             if cur == act.value:
                 in_store = True
@@ -231,24 +276,22 @@ def execute():
         Handler('tb_main', f".//*[@content-desc='{keyword_config.homepage}']"))
     executor.add_handler(
         Handler('cat_home', f".//*[@text='{keyword_config.opentask_btn}']"))
-    executor.add_handler(
-        DoVisitHandler('tasklist', f".//*[@text='{keyword_config.nav}']/.."))
+    # executor.add_handler(
+    #     DoVisitHandler('tasklist', f".//*[@text='{keyword_config.nav}']/.."))
     executor.add_handler(PrefixMatch("浏览15秒", ''))
     executor.add_handler(InStore("任务进行中",))
 
-    while not stop and cnt > 0:
-        print(device)
-        executor.handle_once()
+    return executor.loop()
 
 
 if __name__ == '__main__':
     device = chose_device()
 
     current = device.current_activity()
-    if current == Activity.TB_BROWSER.value:
+    if Activity.TB_BROWSER.package_match(current):
         # TODO 判断有没有任何一个match
         pass
-    elif current != Activity.TB_MAIN.value:
+    else:
         device.start_activity(Activity.TB_MAIN)
         wait_time(20)
     execute()
