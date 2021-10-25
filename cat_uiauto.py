@@ -52,6 +52,8 @@ class MyNode:
 
 stop = False
 cnt = 20
+
+
 @dataclass
 class Keywords:
     homepage = '双11超级喵糖'
@@ -90,7 +92,12 @@ class Executor:
 
 
 class Handler:
-    def __init__(self, xpath, post_delay=5) -> None:
+    name: str
+    xpath: str
+    post_delay: int
+
+    def __init__(self, name, xpath, post_delay=5) -> None:
+        self.name = name
         self.xpath = xpath
         self.post_delay = post_delay
 
@@ -99,9 +106,12 @@ class Handler:
         print(node)
         return True
 
+    def __repr__(self) -> str:
+        return f'<{self.name} Handler>'
+
 
 class DoVisitHandler(Handler):
-    def handle(go_nav_btn: MyNode, executor: Executor):
+    def handle(self, go_nav_btn: MyNode, executor: Executor):
         prompt_line = go_nav_btn.children()[2].text
         print(go_nav_btn, prompt_line)
         _, nums = prompt_line.split('(')
@@ -119,11 +129,11 @@ def execute():
 
     executor = Executor()
     executor.add_handler(
-        Handler(f".//*[@content-desc='{keyword_config.homepage}']"))
+        Handler('tb_main', f".//*[@content-desc='{keyword_config.homepage}']"))
     executor.add_handler(
-        Handler(f".//*[@text='{keyword_config.opentask_btn}']"))
+        Handler('cat_home', f".//*[@text='{keyword_config.opentask_btn}']"))
     executor.add_handler(
-        DoVisitHandler(f".//*[@text='{keyword_config.nav}']/.."))
+        DoVisitHandler('tasklist', f".//*[@text='{keyword_config.nav}']/.."))
 
     while not stop and cnt > 0:
         executor.handle_once()
@@ -131,7 +141,10 @@ def execute():
 
 if __name__ == '__main__':
     current = current_activity()
-    if current != TAOBAO_ACTIVITY:
-        start_activity(TAOBAO_ACTIVITY)
+    if current == TB_BROWSER:
+        # TODO 判断有没有任何一个match
+        pass
+    elif current != TB_MAIN:
+        start_activity(TB_MAIN)
         wait_time(20)
     execute()

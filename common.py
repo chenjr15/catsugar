@@ -1,22 +1,24 @@
-import os
 import random
 from time import sleep
-import subprocess
 from subprocess import check_output, run
-from tqdm import tqdm
-TAOBAO_ACTIVITY = ['com.taobao.taobao', 'com.taobao.tao.TBMainActivity']
+TB_MAIN = ['com.taobao.taobao', 'com.taobao.tao.TBMainActivity']
+TB_BROWSER = ['com.taobao.taobao', 'com.taobao.browser.BrowserActivity']
 
 
 def pos_withoffset(x, y, max_off=5):
     return int(x)+random.randint(0, max_off), int(y)+random.randint(0, max_off)
 
 
-def wait_time(sec=15, random_add=5):
+def wait_time(sec=15, random_add=5, ch='*'):
     if sec == 0:
         return
     sec += random.randrange(random_add//2, random_add)
-    for i in tqdm(range(sec), unit="s"):
+    print(f"{sec}s : ", end='')
+    print('['+'-'*sec+']\b'+'\b'*sec, end='')
+    for i in range(sec):
         sleep(1)
+        print(ch, end='', flush=True)
+    print()
 
 
 def current_activity():
@@ -60,3 +62,5 @@ def dump_window(save_to="/sdcard/window_dump.xml", pull="window_dump.xml"):
 
 if __name__ == '__main__':
     print(current_activity())
+    dump_window()
+    wait_time(10)
