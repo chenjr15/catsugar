@@ -118,9 +118,10 @@ class Executor:
                 continue
             print("exec:", handler)
             stophere = handler.handle(node, self)
+
+            wait_time(handler.post_delay)
             if stophere:
                 break
-            wait_time(handler.post_delay)
 
     def loop(self, limit=-1, interval=30):
         """自动循环
@@ -241,14 +242,14 @@ class InStore(Handler):
         in_store = False
         # 如果在这些activity中说明在执行任务
         for act in (Activity.TB_EXBROWSER, Activity.TB_LIVE, Activity.TB_STORE):
-            if cur == act.value:
+            if act == cur:
                 in_store = True
                 return cur
         return None
 
     def handle(self, node: Union[MyNode, list], executor: Executor) -> bool:
         if isinstance(node, list):
-            if node == Activity.TB_EXBROWSER.value:
+            if Activity.TB_EXBROWSER == node:
                 elem = executor.tree.find(".//node[@text='打开链接']")
                 if elem is not None:
                     node = MyNode(elem)
@@ -293,5 +294,5 @@ if __name__ == '__main__':
         pass
     else:
         device.start_activity(Activity.TB_MAIN)
-        wait_time(20)
+        wait_time(10)
     execute()
