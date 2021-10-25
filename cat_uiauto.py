@@ -1,19 +1,25 @@
 
-import xml.etree.ElementTree as ET
-from time import sleep
-from dataclasses import dataclass
-
 import logging
+from typing import Union
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from time import sleep
+
 try:
-    from common import Device, list_devices, wait_time, Activity, chose_device
+    from common import Activity, Device, chose_device, list_devices, wait_time
     from point import Point
 except ImportError:
-    from .common import Device, list_devices, wait_time, Activity, chose_device
+    from .common import Activity, Device, chose_device, list_devices, wait_time
     from .point import Point
 
 logger = logging.getLogger("Main")
 
 device: Device = None
+
+
+def set_device(dev):
+    global device
+    device = dev
 
 
 class MyNode:
@@ -45,8 +51,24 @@ class MyNode:
         logger.info(f"taping:{self.center}")
         device.tap(self.center.x, self.center.y)
 
+    def full_text(self) -> str:
+        """get full text from it children
+
+        Returns:
+            str: full text
+        """
+        full = []
+        for elem in self.element.iter():
+            text = elem.get('text')
+            if text is not None and text.strip() != '':
+                full.append(text.strip())
+        return " ".join(full)
+
     def __str__(self) -> str:
-        return f'<{self.type}:{self.text} {self.desc} {self.center}>'
+        text = self.text+self.desc
+        if text == '':
+            text = self.full_text()
+        return f'<{self.type}:{text} {self.center}>'
 
     def __repr__(self) -> str:
         return f'<{self.type}:{self.text} {self.desc} {self.center}>'
@@ -61,10 +83,7 @@ class Keywords:
     homepage = '双11超级喵糖'
     opentask_btn = '赚糖领红包'
     nav = '去浏览'
-    task_done_1 = "任务已完成"
-    task_done_2 = "任务已完成喵糖已发放"
-    task_done_3 = "喵糖已发放明天再来吧"
-    task_done_4 = "喵糖已发放"
+    task_done = ['任务已完成', '喵糖已发放', '任务已完成喵糖已发放', '喵糖已发放明天再来吧']
     task_inprogress = "浏览得奖励"
 
 
@@ -84,7 +103,7 @@ class Executor:
 
     def handle_once(self):
         global device
-        device.dump_window(pull=self.xml_filename)
+        device.dump_window(host_path=self.xml_filename)
         self.tree = ET.parse(self.xml_filename)
         for handler in self.handlers:
             node = handler.match(self.tree)
@@ -141,6 +160,70 @@ class DoVisitHandler(Handler):
         return True
 
 
+class PrefixMatch(Handler):
+    def match(self, tree: ET.ElementTree) -> MyNode:
+        elems = tree.findall(".//node[@index='0']")
+        node: MyNode = None
+        for elem in elems:
+            child = elem.find("./node/node[@index='0']")
+            if child is None:
+                continue
+            if child.get('text').startswith('浏览15'):
+                node = MyNode(elem)
+
+        return node
+
+    def handle(self, node: MyNode, executor: Executor) -> bool:
+        node.tap()
+        print(node)
+        return True
+
+
+class InStore(Handler):
+
+    def __init__(self, name, post_delay=5) -> None:
+        super().__init__(name, "", post_delay=post_delay)
+
+    def match(self, tree: ET.ElementTree) -> MyNode:
+        cur = device.current_activity()
+        elem = None
+        for word in keyword_config.task_done:
+
+            elem = tree.find(f".//node[@text='{word}']")
+            if elem is not None:
+                break
+        if elem is not None:
+            return MyNode(elem)
+        in_store = False
+        for act in (Activity.TB_EXBROWSER, Activity.TB_LIVE, Activity.TB_STORE):
+            if cur == act.value:
+                in_store = True
+                return cur
+        return None
+
+    def handle(self, node: Union[MyNode, list], executor: Executor) -> bool:
+        if isinstance(node, list):
+            if node == Activity.TB_EXBROWSER.value:
+                elem = executor.tree.find(".//node[@text='打开链接']")
+                if elem is not None:
+                    node = MyNode(elem)
+                    print(node)
+                    node.tap()
+                    return True
+                else:
+                    print("not found")
+            print("wait for task appear")
+            wait_time(15)
+        if isinstance(node, MyNode):
+            print("task done!")
+            wait_time(5)
+            device.back()
+        else:
+            # keep going
+            return False
+        return True
+
+
 def execute():
 
     executor = Executor()
@@ -150,8 +233,11 @@ def execute():
         Handler('cat_home', f".//*[@text='{keyword_config.opentask_btn}']"))
     executor.add_handler(
         DoVisitHandler('tasklist', f".//*[@text='{keyword_config.nav}']/.."))
+    executor.add_handler(PrefixMatch("浏览15秒", ''))
+    executor.add_handler(InStore("任务进行中",))
 
     while not stop and cnt > 0:
+        print(device)
         executor.handle_once()
 
 
@@ -159,10 +245,10 @@ if __name__ == '__main__':
     device = chose_device()
 
     current = device.current_activity()
-    if current == Activity.TB_BROWSER:
+    if current == Activity.TB_BROWSER.value:
         # TODO 判断有没有任何一个match
         pass
-    elif current != Activity.TB_MAIN:
+    elif current != Activity.TB_MAIN.value:
         device.start_activity(Activity.TB_MAIN)
         wait_time(20)
     execute()
