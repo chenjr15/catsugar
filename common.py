@@ -102,9 +102,8 @@ class Device:
         # if activity is None and isinstance(package, (list, tuple)) and len(package) > 1:
         #     activity = package[1]
         #     package = package[0]
-        # if isinstance(package, Enum):
-        #     activity = package.value[1]
-        #     package = package.value[0]
+        if isinstance(intent, Activity):
+            intent = intent.value
         print("start:", intent)
         self.shell(f"am start -n {intent}")
 
@@ -257,4 +256,5 @@ if __name__ == '__main__':
     dev = chose_device()
     print(dev)
     uname = dev.shell("uname -a")
+    dev.dump_window()
     print(uname)
