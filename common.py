@@ -7,19 +7,32 @@ from enum import Enum
 
 class Activity(Enum):
     # 首页
-    TB_MAIN = ['com.taobao.taobao', 'com.taobao.tao.TBMainActivity']
+    TB_MAIN = 'com.taobao.taobao/com.taobao.tao.TBMainActivity'
     # 喵糖界面
-    TB_BROWSER = ['com.taobao.taobao', 'com.taobao.browser.BrowserActivity']
-    TB_STORE = ['com.taobao.taobao',
-                'com.alibaba.triver.container.TriverMainActivity']
-    TB_LIVE = ['com.taobao.taobao',
-               'com.taobao.taolive.room.TaoLiveVideoActivity']
-    TB_EXBROWSER = ['com.taobao.taobao',
-                    'com.taobao.browser.exbrowser.BrowserUpperActivity']
+    TB_BROWSER = 'com.taobao.taobao/com.taobao.browser.BrowserActivity'
+    TB_STORE = 'com.taobao.taobao/com.alibaba.triver.container.TriverMainActivity'
+    TB_LIVE = 'com.taobao.taobao/com.taobao.taolive.room.TaoLiveVideoActivity'
+    TB_EXBROWSER = 'com.taobao.taobao/com.taobao.browser.exbrowser.BrowserUpperActivity'
+
+    @property
+    def package(self):
+        return self.value.split('/')[0]
+
+    def __eq__(self, o: object) -> bool:
+        if isinstance(o, str):
+            return self.value == o
+        return super().__eq__(o)
 
     def __repr__(self) -> str:
         print(self.name, self.value)
         return super().__repr__()
+
+    def package_match(self, intent: Union[str, 'Activity']):
+        if isinstance(intent, self.__class__):
+            intent = intent.value
+        if isinstance(intent, str):
+            return self.package == intent.split('/')[0]
+        return False
 
 
 def pos_withoffset(x, y, max_off=5):
@@ -83,17 +96,17 @@ class Device:
 
         line = self.shell("dumpsys window | grep mCurrentFocus")
         componts = line.split()
-        return componts[-1][:-1].split('/')
+        return componts[-1][:-1]
 
-    def start_activity(self, package: Union[str, list,  tuple, Enum], activity: str = None):
-        if activity is None and isinstance(package, (list, tuple)) and len(package) > 1:
-            activity = package[1]
-            package = package[0]
-        if isinstance(package, Enum):
-            activity = package.value[1]
-            package = package.value[0]
-        print("start:", package, activity)
-        self.shell(f"am start -n {package}/{activity}")
+    def start_activity(self, intent: str):
+        # if activity is None and isinstance(package, (list, tuple)) and len(package) > 1:
+        #     activity = package[1]
+        #     package = package[0]
+        # if isinstance(package, Enum):
+        #     activity = package.value[1]
+        #     package = package.value[0]
+        print("start:", intent)
+        self.shell(f"am start -n {intent}")
 
     def tap(self, x: int, y: int, use_offset=10):
         if use_offset:
@@ -173,8 +186,8 @@ def current_activity():
     return device.current_activity()
 
 
-def start_activity(package: Union[str, list,  tuple], activity: str = None):
-    return device.start_activity(package, activity)
+def start_activity(intent: str):
+    return device.start_activity(intent)
 
 
 def tap(x: int, y: int, use_offset=10):
@@ -232,10 +245,13 @@ def chose_device() -> Device:
 
 if __name__ == '__main__':
     print(repr(Activity.TB_BROWSER))
+    print(Activity.TB_LIVE.package_match(Activity.TB_BROWSER))
     devices = list_devices()
     for dev in devices:
         print(dev)
-        print(dev.current_activity())
+        cur = dev.current_activity()
+        print(cur, Activity.TB_LIVE == cur,
+              Activity.TB_MAIN.package_match(cur), Activity.TB_EXBROWSER.package_match("cur"))
         print(dev.batter_temp())
     print(devices[0].serial)
     dev = chose_device()
