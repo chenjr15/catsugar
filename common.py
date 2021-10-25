@@ -1,6 +1,6 @@
 import random
 from time import sleep
-from subprocess import check_output, run
+from subprocess import check_output, run, CalledProcessError
 from typing import List, Optional, Union
 from enum import Enum
 
@@ -17,6 +17,10 @@ class Activity(Enum):
     TB_EXBROWSER = ['com.taobao.taobao',
                     'com.taobao.browser.exbrowser.BrowserUpperActivity']
 
+    def __repr__(self) -> str:
+        print(self.name, self.value)
+        return super().__repr__()
+
 
 def pos_withoffset(x, y, max_off=5):
     return int(x)+random.randint(0, max_off), int(y)+random.randint(0, max_off)
@@ -26,12 +30,14 @@ def wait_time(sec=15, random_add=5, ch='*'):
     if sec == 0:
         return
     sec += random.randrange(random_add//2, random_add)
-    print(f"{sec}s : ", end='')
-    print('['+'-'*sec+']\b'+'\b'*sec, end='')
+    # print(f"{sec}s : ", end='')
+    # print('['+'-'*sec+']\b'+'\b'*sec, end='')
+    print(f"{0:2}/{sec} s [{'-'*(sec)}]", end='', flush=True)
     for i in range(sec):
         sleep(1)
-        print(ch, end='', flush=True)
-    print()
+        print(f"\r{i:2}/{sec} s [{ch*i}{'-'*(sec-i)}]", end='', flush=True)
+        # print(ch, end='', flush=True)
+    print(f"\r{sec}/{sec} s [{ch*(sec)}]",  flush=True)
 
 
 ADB_PREFIX = ["adb", "shell"]
@@ -40,18 +46,25 @@ ADB_PREFIX = ["adb", "shell"]
 class Device:
     serial: str
     shell_prefix: list
-    temp_idx: int
+    model: str
 
-    def __init__(self, serial=None, temp_idx=1) -> None:
+    def __init__(self, serial=None) -> None:
         self.serial = serial
         self.prefix = ['adb']
-        self.temp_idx = temp_idx
         self.set_serial(serial)
 
     def set_serial(self, serial):
         if serial:
             self.prefix += ['-s', serial]
         self.shell_prefix = self.prefix+["shell"]
+        try:
+            self.update_model()
+        except:
+            pass
+
+    def update_model(self) -> str:
+        self.model = self.shell("getprop ro.product.model").strip()
+        return self.model
 
     def shell(self, *cmd) -> str:
         cmd_ = self.shell_prefix+list(cmd)
@@ -72,113 +85,116 @@ class Device:
         componts = line.split()
         return componts[-1][:-1].split('/')
 
-    def start_activity(self, package: Union[str, list,  tuple], activity: str = None):
+    def start_activity(self, package: Union[str, list,  tuple, Enum], activity: str = None):
         if activity is None and isinstance(package, (list, tuple)) and len(package) > 1:
             activity = package[1]
             package = package[0]
+        if isinstance(package, Enum):
+            activity = package.value[1]
+            package = package.value[0]
         print("start:", package, activity)
         self.shell(f"am start -n {package}/{activity}")
 
     def tap(self, x: int, y: int, use_offset=10):
         if use_offset:
-            x, y = self.pos_withoffset(x, y, use_offset)
+            x, y = pos_withoffset(x, y, use_offset)
         self.shell(f'input tap {x} {y}')
 
     def back(self):
         self.shell('input keyevent 4')
 
-    def screenshot(self, device_path="/sdcard/screenshot.png", host_path="screenshot", rm=True):
+    def screenshot(self, host_path="screenshot.png", device_path="/sdcard/screenshot.png", rm=True):
         self.shell(f'screenshot -p >{device_path}')
         if host_path:
-            self.pull(device_path, f'./{host_path}.png')
+            self.pull(device_path, host_path)
         if rm:
             self.shell(f"rm -f {device_path}")
 
-    def dump_window(self, device_path="/sdcard/window_dump.xml", host_path="window_dump.xml", rm=True):
+    def dump_window(self, host_path="window_dump.xml", device_path="/sdcard/window_dump.xml",  rm=True):
         self.shell(f'uiautomator dump {device_path}')
         if host_path:
             self.pull(device_path, host_path)
         if rm:
             self.shell(f"rm -f {device_path}")
 
-    def batter_temp(self, idx=None):
-        if idx is None:
-            idx = self.temp_idx
-        output = self.shell(f'cat /sys/class/thermal/thermal_zone{idx}/temp')
-        output = output.strip()
-        return int(output)/1000
+    def batter_temp(self):
+        raw = self.shell(f'dumpsys battery|grep temperature')
+        raw = raw.replace('temperature:', '')
+        raw = raw.strip()
+        val = float(raw)
+        val /= 10
+        return val
 
     def __repr__(self) -> str:
-        return f'<ADB({self.serial}) idx:{self.temp_idx}>'
+        return f'<{self.model}({self.serial}) {self.batter_temp()}℃ >'
+
+
+class DummyDevice(Device):
+
+    def __init__(self, serial=None) -> None:
+        super().__init__(serial=serial)
+        self.cur_activity = ""
+
+    def adb(self, *cmd) -> str:
+        cmd_ = self.prefix+list(cmd)
+        print("Dummy:", " ".join(cmd_))
+
+        return ""
+
+    def shell(self, *cmd) -> str:
+        cmd_ = self.shell_prefix+list(cmd)
+        print("Dummy:", " ".join(cmd_))
+        return "0"
+
+    def update_model(self, serial=None) -> str:
+        self.model = "Dummy"
+        return self.model
+
+    def current_activity(self):
+        return self.cur_activity
 
 
 device = Device()
 
 
 def shell(*cmd) -> str:
-    cmd_ = device.shell_prefix+list(cmd)
-    out = check_output(cmd_)
-    return out.decode()
+    return dev.shell(*cmd)
 
 
 def adb(*cmd) -> str:
-    cmd_ = device.prefix + list(cmd)
-    out = check_output(cmd_)
-    return out.decode()
+    return dev.adb(*cmd)
 
 
 def pull(device_src, host_dest):
-    return device.adb('pull', device_src, host_dest)
+    return device.pull(device_src, host_dest)
 
 
 def current_activity():
-
-    line = device.shell("dumpsys window | grep mCurrentFocus")
-    componts = line.split()
-    return componts[-1][:-1].split('/')
+    return device.current_activity()
 
 
 def start_activity(package: Union[str, list,  tuple], activity: str = None):
-    if activity is None and isinstance(package, (list, tuple)) and len(package) > 1:
-        activity = package[1]
-        package = package[0]
-    print("start:", package, activity)
-    device.shell(f"am start -n {package}/{activity}")
+    return device.start_activity(package, activity)
 
 
 def tap(x: int, y: int, use_offset=10):
-    if use_offset:
-        x, y = device.pos_withoffset(x, y, use_offset)
-    device.shell(f'input tap {x} {y}')
+    return device.tap(x, x, use_offset)
 
 
 def back():
-    device.shell('input keyevent 4')
+    device.back()
 
 
-def screenshot(device_path="/sdcard/screenshot.png", host_path="screenshot", rm=True):
-    device.shell(f'screenshot -p >{device_path}')
-    if host_path:
-        device.pull(device_path, f'./{host_path}.png')
-    if rm:
-        device.shell(f"rm -f {device_path}")
+def screenshot(host_path="screenshot.png", device_path="/sdcard/screenshot.png",  rm=True):
+    device.screenshot(device_path, host_path, rm)
 
 
-def dump_window(device_path="/sdcard/window_dump.xml", host_path="window_dump.xml", rm=True):
-    device.shell(f'uiautomator dump {device_path}')
-    if host_path:
-        device.pull(device_path, host_path)
-    if rm:
-        device.shell(f"rm -f {device_path}")
+def dump_window(host_path="window_dump.xml", device_path="/sdcard/window_dump.xml",  rm=True):
+    device.dump_window(device_path, host_path, rm)
 
 
-def batter_temp(path='/sys/class/thermal/thermal_zone1/temp') -> float:
-    output = device.shell(f'cat {path}')
-    output = output.strip()
-    temp_val = float(output)
-    if temp_val > 1000:
-        temp_val /= 1000
-    return temp_val
+def batter_temp() -> float:
+    return device.batter_temp()
 
 
 def list_devices() -> List[Device]:
@@ -196,7 +212,7 @@ def chose_device() -> Device:
         while cur_device is None:
             print("存在多个设备:")
             for i, dev in enumerate(devs, start=1):
-                print(i, dev.serial)
+                print(i, dev)
 
             idx = input("请输入序号:")
             try:
@@ -215,6 +231,7 @@ def chose_device() -> Device:
 
 
 if __name__ == '__main__':
+    print(repr(Activity.TB_BROWSER))
     devices = list_devices()
     for dev in devices:
         print(dev)
@@ -223,5 +240,5 @@ if __name__ == '__main__':
     print(devices[0].serial)
     dev = chose_device()
     print(dev)
-    uname = dev.shell("hostname")
+    uname = dev.shell("uname -a")
     print(uname)
