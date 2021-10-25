@@ -5,13 +5,15 @@ from dataclasses import dataclass
 
 import logging
 try:
-    from common import *
+    from common import Device, list_devices, wait_time, Activity, chose_device
     from point import Point
 except ImportError:
-    from .common import *
+    from .common import Device, list_devices, wait_time, Activity, chose_device
     from .point import Point
 
 logger = logging.getLogger("Main")
+
+device: Device = None
 
 
 class MyNode:
@@ -39,9 +41,9 @@ class MyNode:
         return (MyNode(e) for e in self.element.iter(tag))
 
     def tap(self):
-
+        global device
         logger.info(f"taping:{self.center}")
-        adbtap(self.center.x, self.center.y)
+        device.tap(self.center.x, self.center.y)
 
     def __str__(self) -> str:
         return f'<{self.type}:{self.text} {self.desc} {self.center}>'
@@ -59,6 +61,11 @@ class Keywords:
     homepage = '双11超级喵糖'
     opentask_btn = '赚糖领红包'
     nav = '去浏览'
+    task_done_1 = "任务已完成"
+    task_done_2 = "任务已完成喵糖已发放"
+    task_done_3 = "喵糖已发放明天再来吧"
+    task_done_4 = "喵糖已发放"
+    task_inprogress = "浏览得奖励"
 
 
 keyword_config = Keywords()
@@ -76,16 +83,14 @@ class Executor:
         self.handlers.append(handler)
 
     def handle_once(self):
-        dump_window(pull=self.xml_filename)
+        global device
+        device.dump_window(pull=self.xml_filename)
         self.tree = ET.parse(self.xml_filename)
-        self.root = self.tree.getroot()
         for handler in self.handlers:
-            elem = self.root.find(handler.xpath)
-            print("finding:", handler.xpath, elem)
-
-            if elem is None:
+            node = handler.match(self.tree)
+            if node is None:
                 continue
-            stophere = handler.handle(MyNode(elem), self)
+            stophere = handler.handle(node, self)
             wait_time(handler.post_delay)
             if stophere:
                 break
@@ -101,10 +106,20 @@ class Handler:
         self.xpath = xpath
         self.post_delay = post_delay
 
-    def handle(self, node: MyNode, executor: Executor):
+    def match(self, tree: ET.ElementTree) -> MyNode:
+        elem = tree.find(self.xpath)
+        if elem is not None:
+            print('Matched!', self.xpath)
+            return MyNode(elem)
+        return None
+
+    def handle(self, node: MyNode, executor: Executor) -> bool:
         node.tap()
         print(node)
         return True
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
     def __repr__(self) -> str:
         return f'<{self.name} Handler>'
@@ -120,7 +135,8 @@ class DoVisitHandler(Handler):
         print("progress", int(a)/int(b))
         go_nav_btn.tap()
         wait_time(30, 20)
-        back()
+        global device
+        device.back()
         wait_time(10)
         return True
 
@@ -140,11 +156,13 @@ def execute():
 
 
 if __name__ == '__main__':
-    current = current_activity()
-    if current == TB_BROWSER:
+    device = chose_device()
+
+    current = device.current_activity()
+    if current == Activity.TB_BROWSER:
         # TODO 判断有没有任何一个match
         pass
-    elif current != TB_MAIN:
-        start_activity(TB_MAIN)
+    elif current != Activity.TB_MAIN:
+        device.start_activity(Activity.TB_MAIN)
         wait_time(20)
     execute()
