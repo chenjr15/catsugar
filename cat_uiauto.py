@@ -8,10 +8,10 @@ from time import sleep
 from subprocess import CalledProcessError
 
 try:
-    from common import Activity, Device, chose_device, list_devices, wait_time
+    from common import Activity, Device, chose_device, list_devices, wait_time, DummyDevice
     from point import Point
 except ImportError:
-    from .common import Activity, Device, chose_device, list_devices, wait_time
+    from .common import Activity, Device, chose_device, list_devices, wait_time, DummyDevice
     from .point import Point
 
 logger = logging.getLogger("Main")
@@ -192,7 +192,7 @@ class Handler:
         return self.__repr__()
 
     def __repr__(self) -> str:
-        return f'<{self.name} Handler>'
+        return f'<{self.name} {self.__class__.__qualname__}>'
 
 
 class TextHandler(Handler):
@@ -208,7 +208,8 @@ class TextHandler(Handler):
         return ((attr, text) for text in self.textlist for attr in self.attrs)
 
     def match(self, tree: ET.ElementTree) -> MyNode:
-        for attr, text in ((attr, text) for text in self.textlist for attr in self.attrs):
+        for attr, text in self.attr_text_iter():
+
             xpath = f".//node[@{attr}='{text}']"
             elem = tree.find(xpath)
             if elem is not None:
@@ -240,7 +241,7 @@ class PrefixMatch(Handler):
                 node = MyNode(elem)
                 break
             else:
-                print(MyNode(elem), "done", done,)
+                print(MyNode(elem), "done")
                 # node = "STOP"
                 node = None
                 continue
@@ -313,8 +314,9 @@ def execute():
     executor = Executor()
     executor.add_handler(TextHandler('tb_main', keyword_config.homepage))
     executor.add_handler(TextHandler('cat_home', keyword_config.opentask_btn))
-    executor.add_handler(TextHandler("签到", "完成签到"))
-    executor.add_handler(TextHandler("天猫主会场", "逛逛天猫主会场(0/1)", post_delay=10))
+    executor.add_handler(TextHandler("签到", ["每日签到领喵糖(0/1)"]))
+    executor.add_handler(TextHandler(
+        "主会场", ["逛逛天猫主会场(0/1)"], attrs=["text"], post_delay=10))
     # executor.add_handler(
     #     DoVisitHandler('tasklist', f".//*[@text='{keyword_config.nav}']/.."))
     executor.add_handler(PrefixMatch("15S查找"))
@@ -331,6 +333,7 @@ def setup():
 
 if __name__ == '__main__':
     setup()
+    # set_device(DummyDevice())
 
     current = device.current_activity()
     if Activity.TB_BROWSER.package_match(current):
