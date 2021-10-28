@@ -1,6 +1,6 @@
 import random
 from time import sleep
-from subprocess import check_output, run, CalledProcessError
+from subprocess import PIPE, check_output, run, CalledProcessError
 from typing import List, Optional, Union
 from enum import Enum
 
@@ -42,6 +42,7 @@ def pos_withoffset(x, y, max_off=5):
 def wait_time(sec=15, random_add=5, ch='*'):
     if sec == 0:
         return
+    print("wait:", sec)
     sec += random.randrange(random_add//2, random_add)
     # print(f"{sec}s : ", end='')
     # print('['+'-'*sec+']\b'+'\b'*sec, end='')
@@ -115,15 +116,28 @@ class Device:
     def back(self):
         self.shell('input keyevent 4')
 
-    def screenshot(self, host_path="screenshot.png", device_path="/sdcard/screenshot.png", rm=True):
-        self.shell(f'screenshot -p >{device_path}')
+    def screenshot(self, host_path=None, device_path="/sdcard/screenshot.png", rm=True):
+        """截图
+
+        Args:
+            host_path (str, optional): 保存在主机上的文件位置，传入None时是当前的serial.png . Defaults to None.
+            device_path (str, optional): 设备上的文件位置. Defaults to "/sdcard/screenshot.png".
+            rm (bool, optional): 是否删除设备上的文件. Defaults to True.
+        """
+        if host_path is None:
+            host_path = f"{self.serial}.png"
+        self.shell(f'screencap -p >{device_path}')
         if host_path:
             self.pull(device_path, host_path)
         if rm:
             self.shell(f"rm -f {device_path}")
 
-    def dump_window(self, host_path="window_dump.xml", device_path="/sdcard/window_dump.xml",  rm=True):
-        self.shell(f'uiautomator dump {device_path}')
+    def dump_window(self, host_path="window_dump.xml", device_path="/storage/emulated/0/window_dump.xml",  rm=True):
+        ret = self.shell(f'uiautomator dump {device_path}')
+        print(ret)
+        # ret = run(self.shell_prefix +
+        #           [f'uiautomator dump {device_path}'], stdout=PIPE, stderr=PIPE)
+        # print(ret, ret.stderr, ret.stdout, ret.returncode)
         if host_path:
             self.pull(device_path, host_path)
         if rm:
@@ -243,6 +257,7 @@ def chose_device() -> Device:
 
 
 if __name__ == '__main__':
+
     print(repr(Activity.TB_BROWSER))
     print(Activity.TB_LIVE.package_match(Activity.TB_BROWSER))
     devices = list_devices()
@@ -252,9 +267,10 @@ if __name__ == '__main__':
         print(cur, Activity.TB_LIVE == cur,
               Activity.TB_MAIN.package_match(cur), Activity.TB_EXBROWSER.package_match("cur"))
         print(dev.batter_temp())
+        dev.screenshot()
     print(devices[0].serial)
     dev = chose_device()
     print(dev)
-    uname = dev.shell("uname -a")
     dev.dump_window()
-    print(uname)
+
+    uname = dev.shell("uname -a")
