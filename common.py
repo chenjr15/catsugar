@@ -4,6 +4,8 @@ from subprocess import PIPE, check_output, run, CalledProcessError
 from typing import List, Optional, Union
 from enum import Enum
 
+from point import Point
+
 
 class Activity(Enum):
     # 首页
@@ -117,7 +119,19 @@ class Device:
     def tap(self, x: int, y: int, use_offset=10):
         if use_offset:
             x, y = pos_withoffset(x, y, use_offset)
+        print('tap:', x, y)
         self.shell(f'input tap {x} {y}')
+
+    def tap_rect(self, a: Point, b: Point):
+        diff = abs(b-a)
+        lower = diff//4
+        upper = lower*3
+        x = min(a.x, b.x)+random.randrange(lower.x, upper.x)
+        y = min(a.y, b.y)+random.randrange(lower.y, upper.y)
+        self.tap(x, y, 0)
+
+    def swipe(self, a: Point, b: Point, duration=200):
+        self.shell(f"input swipe {a.x} {a.y} {b.x} {b.y} {duration}")
 
     def back(self):
         self.shell('input keyevent 4')
