@@ -21,19 +21,38 @@ class Point:
         else:
             raise TypeError(f"Cannot add with {other},type:{type(other)} ")
 
+    def __abs__(self):
+        return Point("", abs(self.x), abs(self.y))
+
+    def __sub__(self, other):
+        if isinstance(other, int):
+            return Point(x=self.x-other, y=self.y-other)
+        elif isinstance(other, Point):
+            return Point(x=self.x-other.x, y=self.y-other.y)
+        else:
+            raise TypeError(
+                f"Cannot substract with {other},type:{type(other)} ")
+
+    def __mul__(self, other):
+        if isinstance(other, int):
+            return Point(x=self.x*other, y=self.y*other)
+        else:
+            raise TypeError(
+                f"Cannot multiply with {other},type:{type(other)} ")
+
     def __radd__(self, other):
         return self+other
 
     def __truediv__(self, other):
         if isinstance(other, (int, float)):
-            result = Point(x=self.x/2, y=self.y/2)
+            result = Point(x=self.x/other, y=self.y/other)
             return result
         else:
             raise TypeError(f"Cannot div with {other},type:{type(other)} ")
 
     def __floordiv__(self, other):
         if isinstance(other, int):
-            result = Point(x=self.x//2, y=self.y//2)
+            result = Point(x=self.x//other, y=self.y//other)
             return result
         else:
             raise TypeError(f"Cannot div with {other},type:{type(other)} ")
