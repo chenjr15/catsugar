@@ -1,6 +1,6 @@
 
 import logging
-from os import stat
+from os import stat, path
 from typing import Iterable, List, Tuple, Union
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -85,14 +85,18 @@ cnt = 20
 class Keywords:
     homepage = ('双11超级喵糖', '20亿红包', '双十一喵糖总动员互动游戏')
     opentask_btn = ('赚糖领红包',)
+    sign_in = ("每日签到领喵糖(0/1)", "签到得喵糖完成可获得1个喵糖，点击可以去完成")
     nav = '去浏览'
     task_done = ('任务已完成', '喵糖已发放', '任务已完成喵糖已发放', '奖励已发放',
                  '喵糖已发放明天再来吧', '喵糖已发放\n明天再来吧', '任务已完成\n喵糖已发放')
     task_inprogress = ("浏览得奖励",)
     attrs = ('content-desc', 'text')
 
-    def load(self, path: str = "keywords.json"):
-        with open(path, 'r', encoding='utf-8') as f:
+    def load(self, jsonfile: str = "keywords.json"):
+        if not path.exists(jsonfile):
+            self.dump(jsonfile)
+            return
+        with open(jsonfile, 'r', encoding='utf-8') as f:
             data = json.load(f)
             for k, v in self.__class__.__dict__.items():
                 if k .startswith('_') or callable(v):
@@ -101,14 +105,14 @@ class Keywords:
                 if k in data:
                     self.__dict__[k] = data[k]
 
-    def dump(self,  path: str = "keywords.json"):
+    def dump(self,  jsonfile: str = "keywords.json"):
         data = {}
         for k, v in self.__class__.__dict__.items():
             if k .startswith('_') or callable(v):
                 continue
             # print(k, v)
             data[k] = self.__getattribute__(k)
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(jsonfile, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
 
@@ -332,8 +336,7 @@ def execute(limit=10):
     executor = Executor()
     executor.add_handler(TextHandler('tb_main', KW.homepage))
     executor.add_handler(TextHandler('cat_home', KW.opentask_btn))
-    executor.add_handler(TextHandler(
-        "签到", ["每日签到领喵糖(0/1)", "签到得喵糖完成可获得1个喵糖，点击可以去完成"]))
+    executor.add_handler(TextHandler("签到", KW.sign_in))
     executor.add_handler(TextHandler(
         "主会场", ["逛逛天猫主会场(0/1)"], attrs=["text"], post_delay=10))
     # executor.add_handler(
