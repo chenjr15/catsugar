@@ -47,11 +47,17 @@ def wait_time(sec=15, random_add=5, ch='*'):
     # print(f"{sec}s : ", end='')
     # print('['+'-'*sec+']\b'+'\b'*sec, end='')
     print(f"{0:2}/{sec} s [{'-'*(sec)}]", end='', flush=True)
-    for i in range(sec):
-        sleep(1)
-        print(f"\r{i:2}/{sec} s [{ch*i}{'-'*(sec-i)}]", end='', flush=True)
-        # print(ch, end='', flush=True)
-    print(f"\r{sec}/{sec} s [{ch*(sec)}]",  flush=True)
+    try:
+        for i in range(sec):
+            sleep(1)
+            print(f"\r{i:2}/{sec} s [{ch*i}{'-'*(sec-i)}]", end='', flush=True)
+            # print(ch, end='', flush=True)
+    except KeyboardInterrupt:
+        print("\nCanceled!!\nCtrl-C again to exit")
+        # 防止无法退出
+        sleep(0.5)
+    else:
+        print(f"\r{sec}/{sec} s [{ch*(sec)}]",  flush=True)
 
 
 ADB_PREFIX = ["adb", "shell"]
