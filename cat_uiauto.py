@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from time import sleep
 from subprocess import CalledProcessError
-
+import json
 try:
     from common import Activity, Device, chose_device, list_devices, wait_time, DummyDevice
     from point import Point
@@ -81,22 +81,38 @@ stop = False
 cnt = 20
 
 
-@dataclass
+# @dataclass
 class Keywords:
     homepage = ('双11超级喵糖', '20亿红包', '双十一喵糖总动员互动游戏')
     opentask_btn = ('赚糖领红包',)
     nav = '去浏览'
-    task_done = ('任务已完成', '喵糖已发放', '任务已完成喵糖已发放',
+    task_done = ('任务已完成', '喵糖已发放', '任务已完成喵糖已发放', '奖励已发放',
                  '喵糖已发放明天再来吧', '喵糖已发放\n明天再来吧', '任务已完成\n喵糖已发放')
     task_inprogress = ("浏览得奖励",)
     attrs = ('content-desc', 'text')
 
-    @property
-    def attr_done_iter(self):
-        return ((attr, w) for w in self.task_done for attr in self.attrs)
+    def load(self, path: str = "keywords.json"):
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            for k, v in self.__class__.__dict__.items():
+                if k .startswith('_') or callable(v):
+                    continue
+                # print(k, v)
+                if k in data:
+                    self.__dict__[k] = data[k]
+
+    def dump(self,  path: str = "keywords.json"):
+        data = {}
+        for k, v in self.__class__.__dict__.items():
+            if k .startswith('_') or callable(v):
+                continue
+            # print(k, v)
+            data[k] = self.__getattribute__(k)
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-keyword_config = Keywords()
+KW = Keywords()
 
 
 class Executor:
@@ -144,6 +160,7 @@ class Executor:
         cnt = 0
         failed = 0
         while not self.stop and (limit < -1 or cnt < limit):
+            KW.load()
             if screenshot:
                 device.screenshot()
             cnt += 1
@@ -261,9 +278,9 @@ class InTask(TextHandler):
 
     def __init__(self, name, keywords: Iterable[str] = None, attrs: Iterable[str] = None, post_delay=5) -> None:
         if keywords is None:
-            keywords = keyword_config.task_done
+            keywords = KW.task_done
         if attrs is None:
-            attrs = keyword_config.attrs
+            attrs = KW.attrs
         super().__init__(name, keywords, attrs=attrs, post_delay=post_delay)
 
     def match(self, tree: ET.ElementTree) -> MyNode:
@@ -313,9 +330,10 @@ class InTask(TextHandler):
 def execute(limit=10):
 
     executor = Executor()
-    executor.add_handler(TextHandler('tb_main', keyword_config.homepage))
-    executor.add_handler(TextHandler('cat_home', keyword_config.opentask_btn))
-    executor.add_handler(TextHandler("签到", ["每日签到领喵糖(0/1)"]))
+    executor.add_handler(TextHandler('tb_main', KW.homepage))
+    executor.add_handler(TextHandler('cat_home', KW.opentask_btn))
+    executor.add_handler(TextHandler(
+        "签到", ["每日签到领喵糖(0/1)", "签到得喵糖完成可获得1个喵糖，点击可以去完成"]))
     executor.add_handler(TextHandler(
         "主会场", ["逛逛天猫主会场(0/1)"], attrs=["text"], post_delay=10))
     # executor.add_handler(
