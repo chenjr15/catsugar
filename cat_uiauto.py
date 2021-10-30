@@ -51,7 +51,8 @@ class MyNode:
     def tap(self):
         global device
         logger.info(f"taping:{self.center}")
-        device.tap(self.center.x, self.center.y)
+        device.tap_rect(self.a, self.b)
+        # device.tap(self.center.x, self.center.y)
 
     def full_text(self) -> str:
         """get full text from it children
@@ -82,7 +83,7 @@ cnt = 20
 
 @dataclass
 class Keywords:
-    homepage = ('双11超级喵糖', '20亿红包',)
+    homepage = ('双11超级喵糖', '20亿红包', '双十一喵糖总动员互动游戏')
     opentask_btn = ('赚糖领红包',)
     nav = '去浏览'
     task_done = ('任务已完成', '喵糖已发放', '任务已完成喵糖已发放',
@@ -142,7 +143,7 @@ class Executor:
         """
         cnt = 0
         failed = 0
-        while not self.stop:
+        while not self.stop and (limit < -1 or cnt < limit):
             if screenshot:
                 device.screenshot()
             cnt += 1
@@ -160,11 +161,11 @@ class Executor:
                 failed += status
             wait_time(1)
             # 连续10次失败, 则尝试返回
-            if failed > 3:
+            if failed > 2:
                 print('Too many fails，return', failed)
                 device.back()
                 failed = 0
-
+        device.start_activity(Activity.TB_MAIN)
         device.back()
         wait_time(1)
         device.back()
@@ -309,7 +310,7 @@ class InTask(TextHandler):
         return True
 
 
-def execute():
+def execute(limit=10):
 
     executor = Executor()
     executor.add_handler(TextHandler('tb_main', keyword_config.homepage))
@@ -323,7 +324,7 @@ def execute():
 
     executor.add_handler(InTask("任务执行页面",))
 
-    return executor.loop()
+    return executor.loop(limit)
 
 
 def setup():
@@ -342,4 +343,7 @@ if __name__ == '__main__':
     else:
         device.start_activity(Activity.TB_MAIN)
         wait_time(1)
-    execute()
+    try:
+        execute(150)
+    except KeyboardInterrupt:
+        print("退出")
