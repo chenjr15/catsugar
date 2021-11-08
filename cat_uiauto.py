@@ -83,6 +83,8 @@ cnt = 20
 
 # @dataclass
 class Keywords:
+
+    onetime_click = ('打开链接', '残忍离开', '浏览精选商品得奖励', '逛逛天猫主会场(0/1)')
     homepage = ('双11超级喵糖', '20亿红包', '双十一喵糖总动员互动游戏')
     opentask_btn = ('赚糖领红包',)
     sign_in = ("每日签到领喵糖(0/1)", "签到得喵糖完成可获得1个喵糖，点击可以去完成")
@@ -91,6 +93,11 @@ class Keywords:
                  '喵糖已发放明天再来吧', '喵糖已发放\n明天再来吧', '任务已完成\n喵糖已发放')
     task_inprogress = ("浏览得奖励",)
     attrs = ('content-desc', 'text')
+
+    @property
+    def full_text_matchs(self):
+        from itertools import chain
+        return list(chain(self.onetime_click, self.homepage, self.opentask_btn, self.sign_in))
 
     def load(self, jsonfile: str = "keywords.json"):
         if not path.exists(jsonfile):
@@ -334,11 +341,11 @@ class InTask(TextHandler):
 def execute(limit=10):
 
     executor = Executor()
-    executor.add_handler(TextHandler('tb_main', KW.homepage))
-    executor.add_handler(TextHandler('cat_home', KW.opentask_btn))
-    executor.add_handler(TextHandler("签到", KW.sign_in))
-    executor.add_handler(TextHandler(
-        "主会场", ["逛逛天猫主会场(0/1)"], attrs=["text"], post_delay=10))
+    executor.add_handler(TextHandler('Full Matcher', KW.full_text_matchs))
+    # executor.add_handler(TextHandler('cat_home', KW.opentask_btn))
+    # executor.add_handler(TextHandler("签到", KW.sign_in))
+    # executor.add_handler(TextHandler(
+    #     "主会场", ["逛逛天猫主会场(0/1)"], attrs=["text"], post_delay=10))
     # executor.add_handler(
     #     DoVisitHandler('tasklist', f".//*[@text='{keyword_config.nav}']/.."))
     executor.add_handler(PrefixMatch("15S查找"))
