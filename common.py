@@ -140,12 +140,12 @@ class Device:
         """截图
 
         Args:
-            host_path (str, optional): 保存在主机上的文件位置，传入None时是当前的serial.png . Defaults to None.
+            host_path (str, optional): 保存在主机上的文件位置，传入None时是./screenshots/当前的serial.png . Defaults to None.
             device_path (str, optional): 设备上的文件位置. Defaults to "/sdcard/screenshot.png".
             rm (bool, optional): 是否删除设备上的文件. Defaults to True.
         """
         if host_path is None:
-            host_path = f"{self.serial}.png"
+            host_path = f"screenshots/{self.serial}.png"
         self.shell(f'screencap -p >{device_path}')
         if host_path:
             self.pull(device_path, host_path)
